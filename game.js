@@ -6,13 +6,28 @@ canvas.height = 640;
 
 // ==================== 音效系统 ====================
 let audioCtx = null;
+let audioUnlocked = false;
+
 function initAudio() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    // iOS Safari 需要在触摸事件中 resume 并播放一个空声音来解锁
+    if (!audioUnlocked && audioCtx) {
+        audioCtx.resume().then(() => {
+            // 播放一个静音buffer来解锁iOS音频
+            const silentBuffer = audioCtx.createBuffer(1, 1, audioCtx.sampleRate);
+            const source = audioCtx.createBufferSource();
+            source.buffer = silentBuffer;
+            source.connect(audioCtx.destination);
+            source.start(0);
+            audioUnlocked = true;
+        });
+    }
 }
 
 function playSound(type) {
-    if (!audioCtx) return;
+    if (!audioCtx || audioCtx.state === 'suspended') return;
     const now = audioCtx.currentTime;
     const gain = audioCtx.createGain();
     gain.connect(audioCtx.destination);
@@ -1072,6 +1087,7 @@ document.addEventListener('keyup', e => { keys[e.key] = false; });
 // ==================== 触摸事件 ====================
 canvas.addEventListener('touchstart', e => {
     e.preventDefault();
+    initAudio(); // 每次触摸都尝试解锁iOS音频
     const pos = getTouchPos(e);
     if (gameState === STATE.MENU) {
         // 难度按钮区域
