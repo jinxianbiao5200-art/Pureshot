@@ -435,9 +435,17 @@ function createExplosion(x, y, color, count) {
     }
 }
 
+function vibrate(ms) {
+    if (navigator.vibrate) navigator.vibrate(ms);
+}
+
 function screenShake(intensity, duration) {
     shakeIntensity = intensity;
     shakeTimer = duration;
+    // 震动强度按屏幕震动等级映射
+    if (intensity >= 10) vibrate([50, 30, 80, 30, 50]); // 大爆炸：连续震动
+    else if (intensity >= 8) vibrate([40, 20, 60]);       // 炸弹
+    else vibrate(30);                                      // 轻微
 }
 
 // ==================== 子弹发射 ====================
@@ -666,6 +674,7 @@ function update() {
                 e.hp--;
                 hit = true;
                 createExplosion(b.x, b.y, '#fff', 3);
+                if (e.type === 'boss') vibrate(15); // Boss命中轻震
                 if (e.hp <= 0) {
                     score += e.score;
                     playSound(e.type === 'boss' ? 'bossExplode' : 'explode');
