@@ -177,6 +177,9 @@ let shakeIntensity = 0;
 let bossWarningTimer = 0;
 let bossActive = false;
 let difficulty = 'normal'; // 'easy' or 'normal'
+let hitFlashTimer = 0;       // 全屏白闪
+let slowMoTimer = 0;         // 击杀慢动作
+let damageNumbers = [];      // 伤害数字
 let menuSelection = 0; // 0 = easy, 1 = normal
 
 // ==================== 触摸控制 ====================
@@ -288,6 +291,10 @@ function drawEnemy(e) {
     const cx = e.x;
     const cy = e.y;
     ctx.save();
+    // 受击闪白效果
+    if (e.flashTimer > 0) {
+        ctx.globalAlpha = 0.5 + Math.random() * 0.5;
+    }
     if (e.type === 'boss') {
         // Boss
         const hpRatio = e.hp / e.maxHp;
@@ -320,7 +327,15 @@ function drawEnemy(e) {
         ctx.beginPath();
         ctx.ellipse(cx, cy - 8, 6, 10, 0, 0, Math.PI * 2);
         ctx.fill();
+        // 受击闪白覆盖
+        if (e.flashTimer > 0) {
+            ctx.globalCompositeOperation = 'source-atop';
+            ctx.fillStyle = 'rgba(255,255,255,0.8)';
+            ctx.fillRect(cx - 50, cy - 35, 100, 60);
+            ctx.globalCompositeOperation = 'source-over';
+        }
         // 血条
+        ctx.globalAlpha = 1;
         ctx.fillStyle = '#333';
         ctx.fillRect(cx - 40, cy - 45, 80, 6);
         ctx.fillStyle = hpRatio > 0.5 ? '#4caf50' : hpRatio > 0.25 ? '#ff9800' : '#f44336';
@@ -624,6 +639,14 @@ function circleRectCollide(circle, rect) {
 // ==================== 主更新逻辑 ====================
 function update() {
     if (gameState !== STATE.PLAYING) return;
+    // 慢动作效果：只更新计时器，跳过其他逻辑
+    if (slowMoTimer > 0 && slowMoTimer % 3 !== 0) {
+        slowMoTimer--;
+        damageNumbers.forEach(d => { d.y -= 0.5; d.life--; });
+        damageNumbers = damageNumbers.filter(d => d.life > 0);
+        if (hitFlashTimer > 0) hitFlashTimer--;
+        return;
+    }
 
     stageTimer++;
     const stageConfig = getStageConfig(stage);
@@ -673,14 +696,25 @@ function update() {
             if (rectCollide(b, { x: e.x, y: e.y, w: e.w, h: e.h })) {
                 e.hp--;
                 hit = true;
+                e.flashTimer = 4; // 敌机受击闪白
                 createExplosion(b.x, b.y, '#fff', 3);
-                if (e.type === 'boss') vibrate(15); // Boss命中轻震
+                if (e.type === 'boss') {
+                    vibrate(15);
+                    screenShake(2, 3); // Boss命中微震屏幕
+                    playSound('hit');
+                    // 伤害数字
+                    damageNumbers.push({ x: b.x + (Math.random()-0.5)*20, y: b.y, text: '1', life: 30, color: '#ffeb3b' });
+                }
                 if (e.hp <= 0) {
                     score += e.score;
                     playSound(e.type === 'boss' ? 'bossExplode' : 'explode');
                     createExplosion(e.x, e.y, e.type === 'boss' ? '#ff5722' : '#ff9800', e.type === 'boss' ? 40 : 15);
+                    // 伤害/击杀数字
+                    damageNumbers.push({ x: e.x, y: e.y - 10, text: e.type === 'boss' ? 'DESTROYED!' : `+${e.score}`, life: 50, color: e.type === 'boss' ? '#ff5722' : '#fff', big: e.type === 'boss' });
                     if (e.type === 'boss') {
-                        screenShake(10, 30);
+                        screenShake(12, 40);
+                        hitFlashTimer = 10; // 击杀Boss全屏闪白
+                        slowMoTimer = 30;   // 慢动作
                         bossActive = false;
                         // 关卡通过
                         if (stage >= MAX_STAGE) {
@@ -757,9 +791,20 @@ function update() {
 
     // 屏幕震动
     if (shakeTimer > 0) shakeTimer--;
+    // 全屏闪白
+    if (hitFlashTimer > 0) hitFlashTimer--;
+    // 慢动作（通过跳帧实现）
+    if (slowMoTimer > 0) slowMoTimer--;
 
     // Boss警告
     if (bossWarningTimer > 0) bossWarningTimer--;
+
+    // 敌机闪白计时
+    enemies.forEach(e => { if (e.flashTimer > 0) e.flashTimer--; });
+
+    // 伤害数字
+    damageNumbers.forEach(d => { d.y -= 1.5; d.life--; });
+    damageNumbers = damageNumbers.filter(d => d.life > 0);
 }
 
 function playerHit() {
@@ -850,6 +895,21 @@ function drawGame() {
         ctx.fillText('⚠ WARNING ⚠', canvas.width / 2, canvas.height / 2);
         ctx.font = '18px sans-serif';
         ctx.fillText('BOSS 来袭！', canvas.width / 2, canvas.height / 2 + 35);
+    }
+    // 伤害数字
+    damageNumbers.forEach(d => {
+        const alpha = Math.min(1, d.life / 15);
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = d.color;
+        ctx.font = d.big ? 'bold 28px sans-serif' : 'bold 16px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(d.text, d.x, d.y);
+        ctx.globalAlpha = 1;
+    });
+    // 全屏闪白（击杀Boss等）
+    if (hitFlashTimer > 0) {
+        ctx.fillStyle = `rgba(255,255,255,${hitFlashTimer / 10 * 0.5})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
     // HUD
     drawHUD();
@@ -1066,6 +1126,9 @@ function resetGame() {
     powerUps = [];
     bossActive = false;
     bossWarningTimer = 0;
+    hitFlashTimer = 0;
+    slowMoTimer = 0;
+    damageNumbers = [];
     gameState = STATE.PLAYING;
 }
 
