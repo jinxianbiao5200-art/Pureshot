@@ -25,6 +25,42 @@ let shakeIntensity = 0;
 let bossWarningTimer = 0;
 let bossActive = false;
 
+// ==================== 触摸控制 ====================
+let touch = { active: false, x: 0, y: 0, startX: 0, startY: 0, playerStartX: 0, playerStartY: 0 };
+let isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+
+// Canvas缩放适配
+let canvasScale = 1;
+let canvasOffsetX = 0;
+let canvasOffsetY = 0;
+
+function resizeCanvas() {
+    const ratio = canvas.width / canvas.height;
+    let w = window.innerWidth;
+    let h = window.innerHeight;
+    if (w / h > ratio) {
+        w = h * ratio;
+    } else {
+        h = w / ratio;
+    }
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    canvasScale = canvas.width / w;
+    const rect = canvas.getBoundingClientRect();
+    canvasOffsetX = rect.left;
+    canvasOffsetY = rect.top;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+function getTouchPos(e) {
+    const t = e.touches[0] || e.changedTouches[0];
+    return {
+        x: (t.clientX - canvasOffsetX) * canvasScale,
+        y: (t.clientY - canvasOffsetY) * canvasScale
+    };
+}
+
 // ==================== 玩家 ====================
 const player = {
     x: 240, y: 560, w: 32, h: 32,
@@ -673,6 +709,24 @@ function drawHUD() {
     ctx.fillStyle = '#ff9800';
     ctx.textAlign = 'right';
     ctx.fillText(`火力: ${'★'.repeat(player.power)}${'☆'.repeat(3 - player.power)}`, canvas.width - 10, 50);
+    // 手机炸弹按钮
+    if (isMobile && player.bombCount > 0) {
+        ctx.save();
+        ctx.globalAlpha = 0.6;
+        ctx.fillStyle = '#2196f3';
+        ctx.beginPath();
+        ctx.arc(canvas.width - 45, canvas.height - 45, 32, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 22px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('💣', canvas.width - 45, canvas.height - 45);
+        ctx.font = '12px sans-serif';
+        ctx.fillText(`x${player.bombCount}`, canvas.width - 45, canvas.height - 18);
+        ctx.restore();
+    }
 }
 
 function drawMenu() {
@@ -697,14 +751,22 @@ function drawMenu() {
     ctx.fillStyle = '#fff';
     ctx.font = '20px sans-serif';
     const blink = Math.sin(Date.now() / 400) > 0;
-    if (blink) ctx.fillText('按 ENTER 开始游戏', canvas.width / 2, 350);
-
-    ctx.fillStyle = '#888';
-    ctx.font = '14px sans-serif';
-    ctx.fillText('方向键 / WASD - 移动', canvas.width / 2, 430);
-    ctx.fillText('自动射击', canvas.width / 2, 455);
-    ctx.fillText('空格键 - 炸弹', canvas.width / 2, 480);
-    ctx.fillText('P - 暂停', canvas.width / 2, 505);
+    if (isMobile) {
+        if (blink) ctx.fillText('点击屏幕开始游戏', canvas.width / 2, 350);
+        ctx.fillStyle = '#888';
+        ctx.font = '14px sans-serif';
+        ctx.fillText('手指拖动 - 控制飞机', canvas.width / 2, 430);
+        ctx.fillText('自动射击', canvas.width / 2, 455);
+        ctx.fillText('右下角按钮 - 炸弹', canvas.width / 2, 480);
+    } else {
+        if (blink) ctx.fillText('按 ENTER 开始游戏', canvas.width / 2, 350);
+        ctx.fillStyle = '#888';
+        ctx.font = '14px sans-serif';
+        ctx.fillText('方向键 / WASD - 移动', canvas.width / 2, 430);
+        ctx.fillText('自动射击', canvas.width / 2, 455);
+        ctx.fillText('空格键 - 炸弹', canvas.width / 2, 480);
+        ctx.fillText('P - 暂停', canvas.width / 2, 505);
+    }
 }
 
 function drawGameOver() {
@@ -721,7 +783,7 @@ function drawGameOver() {
     ctx.font = '18px sans-serif';
     ctx.fillStyle = '#aaa';
     const blink = Math.sin(Date.now() / 400) > 0;
-    if (blink) ctx.fillText('按 ENTER 重新开始', canvas.width / 2, 420);
+    if (blink) ctx.fillText(isMobile ? '点击屏幕重新开始' : '按 ENTER 重新开始', canvas.width / 2, 420);
 }
 
 function drawStageClear() {
@@ -758,7 +820,7 @@ function drawWin() {
     ctx.fillStyle = '#fff';
     ctx.font = '18px sans-serif';
     const blink = Math.sin(Date.now() / 400) > 0;
-    if (blink) ctx.fillText('按 ENTER 再来一次', canvas.width / 2, 400);
+    if (blink) ctx.fillText(isMobile ? '点击屏幕再来一次' : '按 ENTER 再来一次', canvas.width / 2, 400);
 
     // 持续放烟花
     if (Math.random() < 0.1) {
@@ -820,6 +882,46 @@ document.addEventListener('keydown', e => {
     }
 });
 document.addEventListener('keyup', e => { keys[e.key] = false; });
+
+// ==================== 触摸事件 ====================
+canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const pos = getTouchPos(e);
+    if (gameState === STATE.MENU || gameState === STATE.GAME_OVER || gameState === STATE.WIN) {
+        resetGame();
+        return;
+    }
+    if (gameState === STATE.PAUSED) {
+        gameState = STATE.PLAYING;
+        return;
+    }
+    // 检查是否点击了炸弹按钮
+    if (gameState === STATE.PLAYING && pos.x >= canvas.width - 80 && pos.y >= canvas.height - 80) {
+        useBomb();
+        return;
+    }
+    touch.active = true;
+    touch.startX = pos.x;
+    touch.startY = pos.y;
+    touch.playerStartX = player.x;
+    touch.playerStartY = player.y;
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (!touch.active || gameState !== STATE.PLAYING) return;
+    const pos = getTouchPos(e);
+    // 手指偏移量直接映射到飞机位移，1.5倍灵敏度
+    player.x = touch.playerStartX + (pos.x - touch.startX) * 1.5;
+    player.y = touch.playerStartY + (pos.y - touch.startY) * 1.5;
+    player.x = Math.max(20, Math.min(canvas.width - 20, player.x));
+    player.y = Math.max(20, Math.min(canvas.height - 20, player.y));
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+    e.preventDefault();
+    touch.active = false;
+}, { passive: false });
 
 // ==================== 游戏主循环 ====================
 function gameLoop() {
