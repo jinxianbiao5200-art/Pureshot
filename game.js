@@ -4,6 +4,143 @@ const ctx = canvas.getContext('2d');
 canvas.width = 480;
 canvas.height = 640;
 
+// ==================== 音效系统 ====================
+let audioCtx = null;
+function initAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function playSound(type) {
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    const gain = audioCtx.createGain();
+    gain.connect(audioCtx.destination);
+    const osc = audioCtx.createOscillator();
+    osc.connect(gain);
+
+    if (type === 'shoot') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(880, now);
+        osc.frequency.exponentialRampToValueAtTime(440, now + 0.05);
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+        osc.start(now);
+        osc.stop(now + 0.05);
+    } else if (type === 'hit') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(200, now);
+        osc.frequency.exponentialRampToValueAtTime(60, now + 0.15);
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+        osc.start(now);
+        osc.stop(now + 0.15);
+    } else if (type === 'explode') {
+        // 用噪声模拟爆炸
+        const bufferSize = audioCtx.sampleRate * 0.3;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+        const noiseGain = audioCtx.createGain();
+        noiseGain.gain.setValueAtTime(0.2, now);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+        noise.connect(noiseGain);
+        noiseGain.connect(audioCtx.destination);
+        noise.start(now);
+        noise.stop(now + 0.3);
+        // 低频轰鸣
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(150, now);
+        osc.frequency.exponentialRampToValueAtTime(30, now + 0.3);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+        osc.start(now);
+        osc.stop(now + 0.3);
+    } else if (type === 'bossExplode') {
+        // 大爆炸
+        const bufferSize = audioCtx.sampleRate * 0.8;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+        const noiseGain = audioCtx.createGain();
+        noiseGain.gain.setValueAtTime(0.3, now);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+        noise.connect(noiseGain);
+        noiseGain.connect(audioCtx.destination);
+        noise.start(now);
+        noise.stop(now + 0.8);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(100, now);
+        osc.frequency.exponentialRampToValueAtTime(15, now + 0.8);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+        osc.start(now);
+        osc.stop(now + 0.8);
+    } else if (type === 'bomb') {
+        // 全屏炸弹
+        const bufferSize = audioCtx.sampleRate * 0.6;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+        const noiseGain = audioCtx.createGain();
+        noiseGain.gain.setValueAtTime(0.35, now);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+        noise.connect(noiseGain);
+        noiseGain.connect(audioCtx.destination);
+        noise.start(now);
+        noise.stop(now + 0.6);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(200, now);
+        osc.frequency.exponentialRampToValueAtTime(20, now + 0.5);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+        osc.start(now);
+        osc.stop(now + 0.5);
+    } else if (type === 'powerup') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523, now);
+        osc.frequency.setValueAtTime(659, now + 0.08);
+        osc.frequency.setValueAtTime(784, now + 0.16);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+        osc.start(now);
+        osc.stop(now + 0.25);
+    } else if (type === 'playerHit') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(300, now);
+        osc.frequency.exponentialRampToValueAtTime(80, now + 0.3);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+        osc.start(now);
+        osc.stop(now + 0.3);
+    } else if (type === 'select') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(600, now);
+        osc.frequency.setValueAtTime(800, now + 0.06);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+        osc.start(now);
+        osc.stop(now + 0.12);
+    } else if (type === 'start') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(440, now);
+        osc.frequency.setValueAtTime(550, now + 0.1);
+        osc.frequency.setValueAtTime(660, now + 0.2);
+        osc.frequency.setValueAtTime(880, now + 0.3);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.setValueAtTime(0.12, now + 0.2);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+        osc.start(now);
+        osc.stop(now + 0.45);
+    }
+}
+
 // ==================== 游戏状态 ====================
 const STATE = { MENU: 0, PLAYING: 1, PAUSED: 2, GAME_OVER: 3, STAGE_CLEAR: 4, WIN: 5 };
 let gameState = STATE.MENU;
@@ -290,6 +427,7 @@ function screenShake(intensity, duration) {
 
 // ==================== 子弹发射 ====================
 function playerShoot() {
+    playSound('shoot');
     const bx = player.x;
     const by = player.y - 16;
     if (player.power === 1) {
@@ -431,6 +569,7 @@ function updateEnemyAI(e) {
 function useBomb() {
     if (player.bombCount <= 0) return;
     player.bombCount--;
+    playSound('bomb');
     screenShake(8, 20);
     // 消灭所有敌弹
     enemyBullets.forEach(b => {
@@ -514,6 +653,7 @@ function update() {
                 createExplosion(b.x, b.y, '#fff', 3);
                 if (e.hp <= 0) {
                     score += e.score;
+                    playSound(e.type === 'boss' ? 'bossExplode' : 'explode');
                     createExplosion(e.x, e.y, e.type === 'boss' ? '#ff5722' : '#ff9800', e.type === 'boss' ? 40 : 15);
                     if (e.type === 'boss') {
                         screenShake(10, 30);
@@ -574,6 +714,7 @@ function update() {
             if (p.type === 'power') player.power = Math.min(3, player.power + 1);
             else if (p.type === 'bomb') player.bombCount = Math.min(5, player.bombCount + 1);
             else if (p.type === 'life') lives = Math.min(5, lives + 1);
+            playSound('powerup');
             createExplosion(p.x, p.y, '#76ff03', 8);
             return false;
         }
@@ -600,6 +741,7 @@ function update() {
 function playerHit() {
     if (player.invincible > 0) return;
     lives--;
+    playSound('playerHit');
     player.invincible = 120;
     player.power = Math.max(1, player.power - 1);
     screenShake(6, 15);
@@ -907,11 +1049,12 @@ function resetGame() {
 document.addEventListener('keydown', e => {
     keys[e.key] = true;
     if (gameState === STATE.MENU) {
-        if (e.key === 'ArrowLeft' || e.key === 'a') menuSelection = 0;
-        if (e.key === 'ArrowRight' || e.key === 'd') menuSelection = 1;
+        if (e.key === 'ArrowLeft' || e.key === 'a') { menuSelection = 0; initAudio(); playSound('select'); }
+        if (e.key === 'ArrowRight' || e.key === 'd') { menuSelection = 1; initAudio(); playSound('select'); }
     }
     if (e.key === 'Enter') {
         if (gameState === STATE.MENU || gameState === STATE.GAME_OVER || gameState === STATE.WIN) {
+            initAudio(); playSound('start');
             resetGame();
         }
     }
@@ -937,14 +1080,16 @@ canvas.addEventListener('touchstart', e => {
         const easyX = canvas.width / 2 - 80;
         const normalX = canvas.width / 2 + 80;
         if (pos.y >= btnY - btnH / 2 && pos.y <= btnY + btnH / 2) {
-            if (pos.x >= easyX - btnW / 2 && pos.x <= easyX + btnW / 2) { menuSelection = 0; return; }
-            if (pos.x >= normalX - btnW / 2 && pos.x <= normalX + btnW / 2) { menuSelection = 1; return; }
+            initAudio();
+            if (pos.x >= easyX - btnW / 2 && pos.x <= easyX + btnW / 2) { menuSelection = 0; playSound('select'); return; }
+            if (pos.x >= normalX - btnW / 2 && pos.x <= normalX + btnW / 2) { menuSelection = 1; playSound('select'); return; }
         }
         // 点击其他区域开始游戏（按钮下方）
-        if (pos.y > btnY + btnH / 2 + 10) { resetGame(); return; }
+        if (pos.y > btnY + btnH / 2 + 10) { initAudio(); playSound('start'); resetGame(); return; }
         return;
     }
     if (gameState === STATE.GAME_OVER || gameState === STATE.WIN) {
+        initAudio(); playSound('start');
         resetGame();
         return;
     }
