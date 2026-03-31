@@ -24,6 +24,8 @@ let shakeTimer = 0;
 let shakeIntensity = 0;
 let bossWarningTimer = 0;
 let bossActive = false;
+let difficulty = 'normal'; // 'easy' or 'normal'
+let menuSelection = 0; // 0 = easy, 1 = normal
 
 // ==================== 触摸控制 ====================
 let touch = { active: false, x: 0, y: 0, startX: 0, startY: 0, playerStartX: 0, playerStartY: 0 };
@@ -332,14 +334,15 @@ function spawnEnemy() {
 function spawnBoss() {
     bossActive = true;
     bossWarningTimer = 120;
-    const bossHp = 50 + stage * 30;
+    const easy = difficulty === 'easy';
+    const bossHp = easy ? 30 + stage * 15 : 50 + stage * 30;
     enemies.push({
         type: 'boss',
         x: canvas.width / 2, y: -40,
         w: 60, h: 50,
         hp: bossHp, maxHp: bossHp,
-        speed: 1.5,
-        fireRate: 20 - stage * 2,
+        speed: easy ? 1 : 1.5,
+        fireRate: easy ? 30 - stage * 2 : 20 - stage * 2,
         fireTimer: 0,
         score: 2000 + stage * 1000,
         movePattern: 0, moveTimer: 0,
@@ -350,10 +353,11 @@ function spawnBoss() {
 }
 
 function getStageConfig(s) {
+    const easy = difficulty === 'easy';
     return {
-        spawnRate: 0.02 + s * 0.008,
-        mediumRate: 0.1 + s * 0.08,
-        duration: 1200 + s * 300,
+        spawnRate: easy ? 0.012 + s * 0.004 : 0.02 + s * 0.008,
+        mediumRate: easy ? 0.05 + s * 0.04 : 0.1 + s * 0.08,
+        duration: easy ? 900 + s * 200 : 1200 + s * 300,
         bgColor: ['#0a0a2e', '#1a0a0a', '#0a1a0a', '#1a1a0a', '#0a0a1a'][s - 1] || '#0a0a2e'
     };
 }
@@ -489,7 +493,8 @@ function update() {
     bullets.forEach(b => { b.x += b.vx; b.y += b.vy; });
     bullets = bullets.filter(b => b.y > -20 && b.y < canvas.height + 20 && b.x > -20 && b.x < canvas.width + 20);
 
-    enemyBullets.forEach(b => { b.x += b.vx; b.y += b.vy; });
+    const ebSpeed = difficulty === 'easy' ? 0.6 : 1;
+    enemyBullets.forEach(b => { b.x += b.vx * ebSpeed; b.y += b.vy * ebSpeed; });
     enemyBullets = enemyBullets.filter(b => b.y > -20 && b.y < canvas.height + 20 && b.x > -20 && b.x < canvas.width + 20);
 
     // 生成敌机
@@ -748,24 +753,56 @@ function drawMenu() {
     ctx.textAlign = 'center';
     ctx.fillText('PURESHOT', canvas.width / 2, 240);
 
+    // 难度选择按钮
+    const btnY = 310;
+    const btnW = 130;
+    const btnH = 44;
+    const easyX = canvas.width / 2 - 80;
+    const normalX = canvas.width / 2 + 80;
+
+    // 简单模式按钮
+    ctx.fillStyle = menuSelection === 0 ? '#4caf50' : '#333';
+    ctx.beginPath();
+    ctx.roundRect(easyX - btnW / 2, btnY - btnH / 2, btnW, btnH, 8);
+    ctx.fill();
+    ctx.fillStyle = menuSelection === 0 ? '#fff' : '#888';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillText('简单模式', easyX, btnY + 7);
+
+    // 普通模式按钮
+    ctx.fillStyle = menuSelection === 1 ? '#ff9800' : '#333';
+    ctx.beginPath();
+    ctx.roundRect(normalX - btnW / 2, btnY - btnH / 2, btnW, btnH, 8);
+    ctx.fill();
+    ctx.fillStyle = menuSelection === 1 ? '#fff' : '#888';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillText('普通模式', normalX, btnY + 7);
+
+    // 难度说明
+    ctx.font = '13px sans-serif';
+    ctx.fillStyle = '#666';
+    if (menuSelection === 0) {
+        ctx.fillText('5条命 / 敌人少 / 子弹慢 / 初始双发', canvas.width / 2, btnY + 38);
+    } else {
+        ctx.fillText('3条命 / 敌人多 / 子弹快 / 经典难度', canvas.width / 2, btnY + 38);
+    }
+
+    // 开始提示
     ctx.fillStyle = '#fff';
     ctx.font = '20px sans-serif';
     const blink = Math.sin(Date.now() / 400) > 0;
     if (isMobile) {
-        if (blink) ctx.fillText('点击屏幕开始游戏', canvas.width / 2, 350);
+        if (blink) ctx.fillText('选择难度后点击下方开始', canvas.width / 2, 410);
         ctx.fillStyle = '#888';
         ctx.font = '14px sans-serif';
-        ctx.fillText('手指拖动 - 控制飞机', canvas.width / 2, 430);
-        ctx.fillText('自动射击', canvas.width / 2, 455);
-        ctx.fillText('右下角按钮 - 炸弹', canvas.width / 2, 480);
+        ctx.fillText('手指拖动 - 控制飞机', canvas.width / 2, 460);
+        ctx.fillText('自动射击 / 右下角 - 炸弹', canvas.width / 2, 485);
     } else {
-        if (blink) ctx.fillText('按 ENTER 开始游戏', canvas.width / 2, 350);
+        if (blink) ctx.fillText('← → 选择难度，ENTER 开始', canvas.width / 2, 410);
         ctx.fillStyle = '#888';
         ctx.font = '14px sans-serif';
-        ctx.fillText('方向键 / WASD - 移动', canvas.width / 2, 430);
-        ctx.fillText('自动射击', canvas.width / 2, 455);
-        ctx.fillText('空格键 - 炸弹', canvas.width / 2, 480);
-        ctx.fillText('P - 暂停', canvas.width / 2, 505);
+        ctx.fillText('方向键 / WASD - 移动', canvas.width / 2, 460);
+        ctx.fillText('自动射击 / 空格 - 炸弹 / P - 暂停', canvas.width / 2, 485);
     }
 }
 
@@ -844,15 +881,17 @@ function nextStage() {
 }
 
 function resetGame() {
+    difficulty = menuSelection === 0 ? 'easy' : 'normal';
+    const easy = difficulty === 'easy';
     score = 0;
-    lives = 3;
+    lives = easy ? 5 : 3;
     stage = 1;
     stageTimer = 0;
     player.x = 240;
     player.y = 560;
-    player.power = 1;
+    player.power = easy ? 2 : 1;
     player.invincible = 60;
-    player.bombCount = 3;
+    player.bombCount = easy ? 5 : 3;
     player.fireTimer = 0;
     bullets = [];
     enemyBullets = [];
@@ -867,6 +906,10 @@ function resetGame() {
 // ==================== 输入处理 ====================
 document.addEventListener('keydown', e => {
     keys[e.key] = true;
+    if (gameState === STATE.MENU) {
+        if (e.key === 'ArrowLeft' || e.key === 'a') menuSelection = 0;
+        if (e.key === 'ArrowRight' || e.key === 'd') menuSelection = 1;
+    }
     if (e.key === 'Enter') {
         if (gameState === STATE.MENU || gameState === STATE.GAME_OVER || gameState === STATE.WIN) {
             resetGame();
@@ -887,7 +930,21 @@ document.addEventListener('keyup', e => { keys[e.key] = false; });
 canvas.addEventListener('touchstart', e => {
     e.preventDefault();
     const pos = getTouchPos(e);
-    if (gameState === STATE.MENU || gameState === STATE.GAME_OVER || gameState === STATE.WIN) {
+    if (gameState === STATE.MENU) {
+        // 难度按钮区域
+        const btnY = 310;
+        const btnW = 130, btnH = 44;
+        const easyX = canvas.width / 2 - 80;
+        const normalX = canvas.width / 2 + 80;
+        if (pos.y >= btnY - btnH / 2 && pos.y <= btnY + btnH / 2) {
+            if (pos.x >= easyX - btnW / 2 && pos.x <= easyX + btnW / 2) { menuSelection = 0; return; }
+            if (pos.x >= normalX - btnW / 2 && pos.x <= normalX + btnW / 2) { menuSelection = 1; return; }
+        }
+        // 点击其他区域开始游戏（按钮下方）
+        if (pos.y > btnY + btnH / 2 + 10) { resetGame(); return; }
+        return;
+    }
+    if (gameState === STATE.GAME_OVER || gameState === STATE.WIN) {
         resetGame();
         return;
     }
