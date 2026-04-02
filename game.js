@@ -225,7 +225,8 @@ function getTouchPos(e) {
 const player = {
     x: 240, y: 560, w: 32, h: 32,
     speed: 5, fireRate: 10, fireTimer: 0,
-    power: 1, invincible: 0, bombCount: 3
+    power: 1, invincible: 0, bombCount: 3,
+    shield: 0, shieldMax: 300 // 护盾持续帧数（约5秒）
 };
 
 // ==================== 星空背景 ====================
@@ -517,6 +518,63 @@ function drawPlayer() {
         ctx.fill();
     }
 
+    // 护盾效果
+    if (player.shield > 0) {
+        const st = Date.now() / 1000;
+        const shieldRatio = player.shield / player.shieldMax;
+        const radius = 30 + Math.sin(st * 3) * 2;
+        // 外圈
+        ctx.strokeStyle = `rgba(0, 230, 255, ${shieldRatio * 0.7})`;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.stroke();
+        // 内圈发光
+        const shieldGlow = ctx.createRadialGradient(cx, cy, radius - 8, cx, cy, radius + 4);
+        shieldGlow.addColorStop(0, 'rgba(0, 230, 255, 0)');
+        shieldGlow.addColorStop(0.5, `rgba(0, 230, 255, ${shieldRatio * 0.15})`);
+        shieldGlow.addColorStop(1, 'rgba(0, 230, 255, 0)');
+        ctx.fillStyle = shieldGlow;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius + 4, 0, Math.PI * 2);
+        ctx.fill();
+        // 旋转六边形纹路
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(st * 1.5);
+        ctx.strokeStyle = `rgba(100, 240, 255, ${shieldRatio * 0.4})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const a = i * Math.PI / 3;
+            const sx = Math.cos(a) * radius;
+            const sy = Math.sin(a) * radius;
+            if (i === 0) ctx.moveTo(sx, sy);
+            else ctx.lineTo(sx, sy);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+        // 闪烁的能量点
+        for (let i = 0; i < 6; i++) {
+            const a = st * 2 + i * Math.PI / 3;
+            const dx = cx + Math.cos(a) * radius;
+            const dy = cy + Math.sin(a) * radius;
+            ctx.fillStyle = `rgba(255, 255, 255, ${0.3 + Math.sin(st * 8 + i) * 0.3})`;
+            ctx.beginPath();
+            ctx.arc(dx, dy, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        // 快消失时闪烁警告
+        if (shieldRatio < 0.25 && Math.sin(st * 12) > 0) {
+            ctx.strokeStyle = 'rgba(255, 100, 100, 0.5)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+    }
+
     ctx.restore();
 }
 
@@ -721,6 +779,16 @@ function drawPowerUp(p) {
         ctx.font = 'bold 18px sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText('♥', 0, 6);
+    } else if (p.type === 'shield') {
+        ctx.strokeStyle = '#00e5ff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, 10, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = '#00e5ff';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('S', 0, 5);
     }
     ctx.restore();
 }
@@ -983,6 +1051,8 @@ function update() {
 
     // 无敌时间
     if (player.invincible > 0) player.invincible--;
+    // 护盾持续消耗
+    if (player.shield > 0) player.shield--;
 
     // 更新子弹
     bullets.forEach(b => { b.x += b.vx; b.y += b.vy; });
@@ -1041,8 +1111,8 @@ function update() {
                     }
                     // 掉落道具
                     if (Math.random() < 0.25 || e.type === 'boss') {
-                        const types = ['power', 'bomb', 'life'];
-                        const weights = [0.6, 0.25, 0.15];
+                        const types = ['power', 'bomb', 'life', 'shield'];
+                        const weights = [0.45, 0.2, 0.15, 0.2];
                         let r = Math.random();
                         let type = types[0];
                         for (let i = 0; i < weights.length; i++) {
@@ -1087,6 +1157,7 @@ function update() {
             if (p.type === 'power') player.power = Math.min(5, player.power + 1);
             else if (p.type === 'bomb') player.bombCount = Math.min(5, player.bombCount + 1);
             else if (p.type === 'life') lives = Math.min(5, lives + 1);
+            else if (p.type === 'shield') player.shield = player.shieldMax;
             playSound('powerup');
             createExplosion(p.x, p.y, '#76ff03', 8);
             return false;
@@ -1127,6 +1198,16 @@ function update() {
 
 function playerHit() {
     if (player.invincible > 0) return;
+    // 护盾吸收伤害
+    if (player.shield > 0) {
+        player.shield = Math.max(0, player.shield - 60); // 每次受击消耗1秒护盾
+        player.invincible = 20; // 短暂无敌
+        screenShake(3, 5);
+        playSound('hit');
+        createExplosion(player.x, player.y, '#00e5ff', 10);
+        damageNumbers.push({ x: player.x, y: player.y - 20, text: 'BLOCKED!', life: 30, color: '#00e5ff' });
+        return;
+    }
     lives--;
     playSound('playerHit');
     player.invincible = 120;
@@ -1458,6 +1539,7 @@ function resetGame() {
     player.power = easy ? 2 : 1;
     player.invincible = 60;
     player.bombCount = easy ? 5 : 3;
+    player.shield = 0;
     player.fireTimer = 0;
     bullets = [];
     enemyBullets = [];
