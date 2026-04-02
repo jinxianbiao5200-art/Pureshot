@@ -1396,6 +1396,10 @@ function drawMenu() {
     ctx.textAlign = 'center';
     ctx.fillText('PURESHOT', canvas.width / 2, 240);
 
+    ctx.fillStyle = '#555';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('v1.5.0', canvas.width / 2, canvas.height - 15);
+
     // 难度选择按钮
     const btnY = 310;
     const btnW = 130;
